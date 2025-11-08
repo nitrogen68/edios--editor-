@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Express Editor Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'dark-bg': '#1e1e1e',
+            'dark-card': '#252526',
+            'dark-border': '#333333',
+            'dark-text': '#d4d4d4',
+            'dark-text-sec': '#a0a0a0',
+            'accent-blue': '#00bcd4',
+            'accent-hover': '#00a9bb',
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/monokai-sublime.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    /* Styling for the file list container */
+    .file-list-container::-webkit-scrollbar {
+        width: 8px;
+    }
+    .file-list-container::-webkit-scrollbar-thumb {
+        background-color: #555;
+        border-radius: 4px;
+    }
+    .file-list-container::-webkit-scrollbar-track {
+        background-color: #1e1e1e;
+    }
+    /* Modal styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 50;
+    }
+    .modal-content {
+      background: #252526;
+      padding: 20px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 350px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    /* Override for textarea to preserve font-mono and size */
+    #content {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+  </style>
+</head>
+<body class="bg-dark-bg min-h-screen text-dark-text p-4">
+<div class="max-w-6xl mx-auto bg-dark-card shadow-2xl rounded-xl overflow-hidden border border-dark-border">
+  
+  <div class="p-6 border-b border-dark-border">
+    <h1 class="text-4xl font-extrabold text-accent-blue flex items-center">
+      <svg class="w-8 h-8 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+      Express Editor Pro
+    </h1>
+    <p class="text-sm text-dark-text-sec mt-1">Buat, edit, dan kelola file dengan tampilan modern</p>
+  </div>
+  
+  <div class="p-4 flex flex-col sm:flex-row gap-3 sm:items-center border-b border-dark-border">
+    <input type="text" id="directoryInput" value=""
+      class="flex-1 bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-sm text-dark-text focus:border-accent-blue focus:ring-1 focus:ring-accent-blue transition duration-200"
+      placeholder="Masukkan path direktori..." required />
+    <button onclick="loadDirectory(document.getElementById('directoryInput').value)" class="bg-accent-blue hover:bg-accent-hover text-white px-5 py-2 rounded-lg text-sm font-semibold transition duration-200 shadow-md">
+      Buka Folder
+    </button>
+  </div>
+
+  <div class="lg:flex">
+    
+    <div class="lg:w-2/3 border-r border-dark-border">
+      <form id="fileForm" class="p-5 space-y-4">
+        <input type="text" id="file_name" name="file_name" placeholder="Nama File (Contoh: index.html)"
+          value="" 
+          class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-dark-text placeholder-dark-text-sec text-base focus:border-accent-blue focus:ring-1 focus:ring-accent-blue transition duration-200" required />
+
+        <textarea id="content" name="content" rows="40"
+      class="w-full bg-[#1e1e1e] border border-dark-border rounded px-4 py-2 font-mono text-[13px] whitespace-pre leading-snug"></textarea>
+
+        <div class="flex flex-wrap gap-3 pt-2">
+          <button type="button" onclick="saveFile()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-md transition duration-200">
+            <i class="fas fa-save mr-1"></i> Simpan
+          </button>
+          <button type="button" onclick="uploadFiles()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-md transition duration-200">
+            <i class="fas fa-upload mr-1"></i> Upload
+          </button>
+          <button type="button" onclick="copyText()" class="bg-gray-700 hover:bg-gray-600 text-dark-text px-3 py-2 rounded-lg text-sm transition duration-200">
+            <i class="fas fa-copy"></i> Copy
+          </button>
+          <button type="button" onclick="pasteText()" class="bg-gray-700 hover:bg-gray-600 text-dark-text px-3 py-2 rounded-lg text-sm transition duration-200">
+            <i class="fas fa-paste"></i> Paste
+          </button>
+          <button type="button" onclick="undoText()" class="bg-gray-700 hover:bg-gray-600 text-dark-text px-3 py-2 rounded-lg text-sm transition duration-200">
+            <i class="fas fa-undo"></i> Undo
+          </button>
+          <button type="button" onclick="redoText()" class="bg-gray-700 hover:bg-gray-600 text-dark-text px-3 py-2 rounded-lg text-sm transition duration-200">
+            <i class="fas fa-redo"></i> Redo
+          </button>
+          <button type="button" onclick="clearText()" class="bg-gray-700 hover:bg-gray-600 text-dark-text px-3 py-2 rounded-lg text-sm transition duration-200">
+            <i class="fas fa-broom"></i> Clear
+          </button>
+
+          <div id="editorFileActions" class="flex flex-wrap gap-3 pt-2 hidden">
+              <button type="button" onclick="clearEditor()" class="bg-gray-700 hover:bg-gray-600 text-dark-text px-4 py-2 rounded-lg text-sm font-medium transition duration-200">
+                  Batal
+              </button>
+              <a id="editorDelete" href="#" onclick="deleteFile(event)" 
+                class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-md transition duration-200">
+                <i class="fas fa-trash-alt mr-1"></i> Hapus
+              </a>
+              <a id="editorDownload" href="#" target="_blank"
+                class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-md transition duration-200">
+                <i class="fas fa-download mr-1"></i> Download
+              </a>
+              <a id="editorView" href="#" target="_blank"
+                class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-md transition duration-200">
+                <i class="fas fa-external-link-alt mr-1"></i> Lihat
+              </a>
+          </div>
+          
+        </div>
+      </form>
+    </div>
+    
+    <div class="lg:w-1/3 p-5">
+      <div class="flex justify-between items-center mb-4 border-b pb-2 border-dark-border">
+          <h2 class="text-xl font-semibold text-accent-blue flex items-center">
+            📂 Direktori: <code id="currentDirCode" class="text-sm bg-dark-bg px-2 py-0.5 rounded text-dark-text-sec ml-2">/</code>
+          </h2>
+          <button onclick="createFolderPrompt()" class="bg-green-600 hover:bg-green-700 text-white w-8 h-8 rounded-full flex items-center justify-center transition duration-200" title="Buat Folder Baru">
+            <i class="fas fa-plus"></i>
+          </button>
+      </div>
+      
+      <ul id="fileList" class="space-y-2 max-h-[70vh] overflow-y-auto pr-2 file-list-container">
+        </ul>
+    </div>
+  </div>
+</div>
+
+<div id="fileModal" class="modal-overlay">
+  <div class="modal-content">
+    <h3 id="modalTitle" class="text-xl font-bold mb-4 text-accent-blue truncate"></h3>
+    <div id="modalContent" class="space-y-3">
+        <a id="modalEdit" href="#" onclick="openFileFromModal(event)" class="block bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-lg text-sm text-center"><i class="fas fa-edit mr-2"></i> Edit</a>
+        <a id="modalRename" href="#" onclick="renameFilePrompt(this.dataset.oldname, this.dataset.isdir)" class="block bg-gray-600 hover:bg-gray-700 text-dark-text py-2 px-3 rounded-lg text-sm text-center" data-oldname="" data-isdir="false"><i class="fas fa-i-cursor mr-2"></i> Rename</a>
+        <a id="modalView" href="#" target="_blank" class="block bg-teal-600 hover:bg-teal-700 text-white py-2 px-3 rounded-lg text-sm text-center"><i class="fas fa-external-link-alt mr-2"></i> Kunjungi Halaman</a>
+        <a id="modalDownload" href="#" target="_blank" class="block bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-3 rounded-lg text-sm text-center"><i class="fas fa-download mr-2"></i> Download</a>
+        <a id="modalDelete" href="#" onclick="deleteFile(event, true)" class="block bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded-lg text-sm text-center"><i class="fas fa-trash-alt mr-2"></i> Hapus</a>
+        
+        <a id="modalBrowse" href="#" onclick="browseFolderFromModal(event)" class="hidden block bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded-lg text-sm text-center"><i class="fas fa-folder-open mr-2"></i> Buka Folder</a>
+
+    </div>
+    <button onclick="hideFileModal()" class="w-full mt-4 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg text-sm">Tutup</button>
+  </div>
+</div>
+<div id="notifBox" style="
+  display: none;
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #2ecc71;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  font-family: sans-serif;
+  font-weight: 600;
+  z-index: 9999;
+  transition: opacity 0.3s ease;
+"></div>
+
+<script>
+// --- GLOBAL STATE ---
+let currentRelativeDir = '/';
+let currentFileName = ''; 
+
+// --- NOTIFICATION & UTILITIES ---
+function showNotif(msg, color = '#2ecc71') {
+  const box = document.getElementById('notifBox');
+  box.innerText = msg;
+  box.style.background = color;
+  box.style.display = 'block';
+  box.style.opacity = '1';
+  setTimeout(() => {
+    box.style.opacity = '0';
+    setTimeout(() => box.style.display = 'none', 300);
+  }, 2500);
+}
+
+// --- FILE SYSTEM LOGIC (AJAX) ---
+
+// Memuat daftar file dan memperbarui UI
+async function loadDirectory(dir) {
+    currentRelativeDir = dir;
+    history.pushState(null, '', `?directory=${encodeURIComponent(dir)}`); // Update URL
+
+    const fileListElement = document.getElementById('fileList');
+    const directoryCodeElement = document.getElementById('currentDirCode');
+
+    fileListElement.innerHTML = '<li class="text-dark-text-sec">Memuat...</li>';
+    directoryCodeElement.textContent = dir.replace(/\/$/, '');
+    document.getElementById('directoryInput').value = dir.replace(/\/$/, '');
+
+    try {
+        const response = await fetch(`/api/files?directory=${encodeURIComponent(dir)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            currentRelativeDir = data.relativeDir; // Server memberikan path yang sudah divalidasi
+            
+            fileListElement.innerHTML = ''; // Kosongkan
+            
+            // Tombol "Kembali"
+            if (currentRelativeDir !== '/') {
+                 const parentDir = currentRelativeDir.split('/').filter(p => p).slice(0, -1).join('/');
+                 fileListElement.innerHTML += `
+                    <li class="flex justify-between items-center bg-dark-bg px-4 py-3 rounded-lg hover:bg-[#303030] transition duration-150 border border-dark-border">
+                        <a href="#" onclick="loadDirectory('/${parentDir}')" class="text-yellow-400 font-medium hover:text-yellow-300 transition duration-150 flex items-center">
+                            <i class="fas fa-level-up-alt mr-2"></i> .. (Kembali)
+                        </a>
+                    </li>
+                 `;
+            }
+
+            // Render file/folder
+            data.files.forEach(file => {
+                const icon = file.isDir ? 'fas fa-folder text-green-400' : 'fas fa-file-code text-blue-400';
+                const linkClass = file.isDir ? 'text-green-400 font-medium' : 'text-blue-400';
+                const action = file.isDir ? `loadDirectory('${currentRelativeDir}${file.name}/')` : `openFile('${file.name}')`;
+                const isDirString = file.isDir ? 'true' : 'false';
+
+                fileListElement.innerHTML += `
+                    <li class="flex justify-between items-center bg-dark-bg px-4 py-3 rounded-lg hover:bg-[#303030] transition duration-150 border border-dark-border">
+                        <a href="#" onclick="${action}" class="${linkClass} hover:text-blue-300 transition duration-150 truncate max-w-[70%] flex items-center">
+                            <i class="${icon} mr-2"></i> ${file.name}
+                        </a>
+                        <button onclick="showFileModal('${file.name}', ${isDirString}, '${currentRelativeDir}')" 
+                                class="text-dark-text-sec hover:text-white transition duration-150" title="Opsi">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                    </li>
+                `;
+            });
+            
+            // Muat file yang saat ini sedang diedit (jika ada)
+            if (currentFileName) openFile(currentFileName);
+            else clearEditor();
+
+        } else {
+            showNotif(`Error: ${data.message}`, '#e74c3c');
+            fileListElement.innerHTML = `<li class="text-red-500">Gagal memuat direktori: ${data.message}</li>`;
+        }
+    } catch (error) {
+        showNotif(`Error komunikasi: ${error.message}`, '#e74c3c');
+        fileListElement.innerHTML = `<li class="text-red-500">Error komunikasi dengan server.</li>`;
+    }
+}
+
+// Membuka file untuk diedit
+async function openFile(fileName) {
+    currentFileName = fileName;
+    document.getElementById('file_name').value = fileName;
+    document.getElementById('content').value = 'Memuat konten...';
+    document.getElementById('editorFileActions').classList.add('hidden');
+    
+    // Update URL agar bisa dilihat di browser
+    history.pushState(null, '', `?directory=${encodeURIComponent(currentRelativeDir)}&file=${encodeURIComponent(fileName)}`);
+
+
+    try {
+        const response = await fetch(`/api/file-content?directory=${encodeURIComponent(currentRelativeDir)}&file=${encodeURIComponent(fileName)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            document.getElementById('content').value = data.content;
+            document.getElementById('editorFileActions').classList.remove('hidden');
+            setupEditorFileActions(fileName);
+            showNotif(`File '${fileName}' dimuat.`, '#2ecc71');
+        } else {
+            document.getElementById('content').value = `Gagal memuat konten: ${data.message}`;
+            showNotif(`Gagal memuat file: ${data.message}`, '#e74c3c');
+        }
+        
+    } catch (error) {
+        document.getElementById('content').value = `Error komunikasi: ${error.message}`;
+        showNotif(`Error komunikasi saat memuat file.`, '#e74c3c');
+    }
+}
+
+// Menyimpan/Membuat File
+function saveFile() {
+    const name = document.getElementById('file_name').value;
+    const content = document.getElementById('content').value;
+    
+    if (!name) {
+        showNotif('Nama file harus diisi!', '#f39c12');
+        return;
+    }
+
+    fetch('/api/save-file', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ file_name: name, content: content, directory: currentRelativeDir }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        showNotif(data.message, data.success ? '#2ecc71' : '#e74c3c');
+        if (data.success) {
+            currentFileName = name;
+            loadDirectory(currentRelativeDir); // Muat ulang list
+        }
+    })
+    .catch(error => {
+        showNotif(`Error saat menyimpan: ${error.message}`, '#e74c3c');
+    });
+}
+
+// Membuat Folder
+function createFolderPrompt() {
+    const folderName = prompt("Masukkan nama folder baru:");
+    if (!folderName) return;
+
+    fetch('/api/create-folder', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ new_folder: folderName, directory: currentRelativeDir }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        showNotif(data.message, data.success ? '#2ecc71' : '#e74c3c');
+        if (data.success) loadDirectory(currentRelativeDir);
+    })
+    .catch(error => {
+        showNotif(`Error saat membuat folder: ${error.message}`, '#e74c3c');
+    });
+}
+
+// Menghapus File/Folder
+function deleteFile(event, isModal = false) {
+    event.preventDefault();
+    hideFileModal();
+    
+    let targetFile = isModal ? document.getElementById('modalDelete').dataset.targetFile : currentFileName;
+    let isDir = isModal ? document.getElementById('modalDelete').dataset.isDir === 'true' : false;
+
+    if (!targetFile) {
+        showNotif('Tidak ada file atau folder yang dipilih untuk dihapus.', '#f39c12');
+        return;
+    }
+    
+    if (!confirm(`Apakah Anda yakin ingin menghapus ${isDir ? 'folder' : 'file'}: ${targetFile}?`)) return;
+
+    fetch(`/api/delete?directory=${encodeURIComponent(currentRelativeDir)}&file=${encodeURIComponent(targetFile)}`, {
+        method: 'DELETE',
+    })
+    .then(res => res.json())
+    .then(data => {
+        showNotif(data.message, data.success ? '#2ecc71' : '#e74c3c');
+        if (data.success) {
+            if (targetFile === currentFileName) clearEditor();
+            loadDirectory(currentRelativeDir);
+        }
+    })
+    .catch(error => {
+        showNotif(`Error saat menghapus: ${error.message}`, '#e74c3c');
+    });
+}
+
+// Rename File/Folder
+function renameFilePrompt(oldName, isDir) {
+    hideFileModal(); 
+    
+    const newName = prompt(`Rename ${isDir === 'true' ? 'folder' : 'file'} "${oldName}" menjadi:`, oldName);
+    
+    if (!newName || newName === oldName) return;
+
+    fetch('/api/rename', {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ old_name: oldName, new_name: newName, directory: currentRelativeDir }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        showNotif(data.message, data.success ? '#2ecc71' : '#e74c3c');
+        if (data.success) {
+             if (oldName === currentFileName) currentFileName = newName;
+             loadDirectory(currentRelativeDir);
+        }
+    })
+    .catch(error => {
+        showNotif(`Error saat mengganti nama: ${error.message}`, '#e74c3c');
+    });
+}
+
+// Upload File
+function uploadFiles() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.multiple = true;
+  input.onchange = () => {
+    const formData = new FormData();
+    for (const file of input.files) {
+      formData.append('files', file);
+    }
+    formData.append('directory', currentRelativeDir);
+    
+    fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(res => res.json())
+    .then(data => {
+      showNotif(data.message, data.success ? '#2ecc71' : '#e74c3c');
+      if (data.success) loadDirectory(currentRelativeDir);
+    })
+    .catch(error => {
+        showNotif(`Error saat upload: ${error.message}`, '#e74c3c');
+    });
+  };
+  input.click();
+}
+
+
+// --- UI/EDITOR UTILITIES ---
+
+function clearEditor() {
+    document.getElementById('file_name').value = '';
+    document.getElementById('content').value = '';
+    document.getElementById('editorFileActions').classList.add('hidden');
+    currentFileName = '';
+    history.pushState(null, '', `?directory=${encodeURIComponent(currentRelativeDir)}`);
+}
+
+function setupEditorFileActions(fileName) {
+    const encodedFileName = encodeURIComponent(fileName);
+    const encodedDir = encodeURIComponent(currentRelativeDir);
+    const baseUrl = window.location.origin; // Asumsi file dapat diakses dari browser
+
+    document.getElementById('editorDelete').dataset.targetFile = fileName;
+    document.getElementById('editorDownload').href = `/api/download?directory=${encodedDir}&file=${encodedFileName}`;
+    document.getElementById('editorView').href = `${baseUrl}${currentRelativeDir}${fileName}`;
+}
+
+// --- MODAL LOGIC ---
+
+function showFileModal(fileName, isDir, relativePath) {
+    const modal = document.getElementById('fileModal');
+    const title = document.getElementById('modalTitle');
+    const encodedFileName = encodeURIComponent(fileName);
+    const encodedDir = encodeURIComponent(currentRelativeDir);
+    
+    title.textContent = isDir ? `Opsi Folder: ${fileName}` : `Opsi File: ${fileName}`;
+    
+    // Base Path
+    const itemPath = relativePath + fileName;
+    
+    // --- Setup Link Umum ---
+    document.getElementById('modalRename').dataset.oldname = fileName;
+    document.getElementById('modalRename').dataset.isdir = isDir;
+    
+    document.getElementById('modalDelete').dataset.targetFile = fileName;
+    document.getElementById('modalDelete').dataset.isDir = isDir;
+    
+    // --- Setup Link Khusus ---
+    if (isDir) {
+        // Folder
+        document.getElementById('modalEdit').style.display = 'none';
+        document.getElementById('modalView').style.display = 'none'; 
+        document.getElementById('modalDownload').style.display = 'none'; 
+        
+        document.getElementById('modalBrowse').classList.remove('hidden');
+        document.getElementById('modalBrowse').href = itemPath;
+
+    } else {
+        // File
+        document.getElementById('modalEdit').style.display = 'block';
+        document.getElementById('modalView').style.display = 'block';
+        document.getElementById('modalDownload').style.display = 'block';
+        document.getElementById('modalBrowse').classList.add('hidden'); 
+
+        document.getElementById('modalEdit').dataset.file = fileName;
+        document.getElementById('modalView').href = itemPath;
+        document.getElementById('modalDownload').href = `/api/download?directory=${encodedDir}&file=${encodedFileName}`;
+    }
+    
+    modal.style.display = 'flex';
+}
+
+function hideFileModal() {
+    document.getElementById('fileModal').style.display = 'none';
+}
+
+function openFileFromModal(event) {
+    event.preventDefault();
+    hideFileModal();
+    const fileName = event.currentTarget.dataset.file;
+    if (fileName) openFile(fileName);
+}
+
+function browseFolderFromModal(event) {
+    event.preventDefault();
+    hideFileModal();
+    const newDir = event.currentTarget.href.split('?directory=')[1];
+    if (newDir) loadDirectory(decodeURIComponent(newDir).replace(window.location.origin, ''));
+}
+
+
+// --- CORE EDITOR COMMANDS ---
+// (Fungsi copy/paste/undo/redo/clear tetap sama)
+
+function copyText() {
+  const textarea = document.getElementById('content');
+  textarea.select();
+  document.execCommand('copy');
+  textarea.focus();
+  showNotif('Teks disalin ke clipboard.');
+}
+
+function pasteText() {
+  const textarea = document.getElementById('content');
+  navigator.clipboard.readText().then(text => {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    textarea.value = textarea.value.substring(0, start) + text + textarea.value.substring(end);
+    textarea.selectionStart = textarea.selectionEnd = start + text.length;
+    textarea.focus();
+    showNotif('Teks ditempel dari clipboard.');
+  }).catch(err => {
+    showNotif('Gagal menempel teks: ' + err, '#f39c12');
+  });
+}
+
+function undoText() {
+  const textarea = document.getElementById('content');
+  textarea.focus();
+  document.execCommand('undo');
+}
+
+function redoText() {
+  const textarea = document.getElementById('content');
+  textarea.focus();
+  document.execCommand('redo');
+}
+
+// --- INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', () => {
+    // Ambil direktori dari URL saat pertama kali dimuat
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialDir = urlParams.get('directory') || '/';
+    const initialFile = urlParams.get('file');
+
+    loadDirectory(initialDir).then(() => {
+        if (initialFile) {
+            openFile(initialFile);
+        }
+    });
+
+    hljs.highlightAll();
+    const textarea = document.getElementById('content');
+    if (textarea) textarea.focus();
+    
+    document.getElementById('fileModal').addEventListener('click', function(e) {
+      if (e.target.id === 'fileModal') {
+        hideFileModal();
+      }
+    });
+});
+</script>
+</body>
+</html>
