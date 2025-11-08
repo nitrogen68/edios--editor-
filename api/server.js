@@ -1,28 +1,34 @@
-// server.js (Backend Express.js)
+// server.js (Dioptimalkan untuk Vercel)
 
 const express = require('express');
-const fs = require('fs/promises'); // Untuk operasi file asinkron
+const fs = require('fs/promises');
 const path = require('path');
-const multer = require('multer'); // Untuk upload file
+const multer = require('multer');
 const bodyParser = require('body-parser');
 
 const app = express();
-const PORT = 3000;
+// PORT tidak diperlukan di Vercel, cukup hapus atau biarkan sebagai komentar
 
 // --- KONFIGURASI PATH AMAN ---
-// Asumsi root aplikasi adalah Document Root yang aman
+// Di Vercel, kita berasumsi DOCUMENT_ROOT adalah direktori proyek saat runtime
 const DOCUMENT_ROOT = path.resolve(__dirname); 
 
 // Middleware untuk parsing body JSON dan URL-encoded
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// PENTING: Middleware untuk melayani aset statis
+// Ini menangani file seperti index.html, CSS, dan JS yang diminta oleh browser,
+// terutama jika rute fallback vercel.json diarahkan ke server.js
+app.use(express.static(DOCUMENT_ROOT));
+
+
 // Konfigurasi Multer untuk upload file
+// Catatan Vercel: Operasi file hanya akan berhasil di /tmp
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        // Pastikan path tujuan aman sebelum digunakan
-        const safeDir = getSafePath(req.body.directory || './'); 
-        cb(null, safeDir);
+        // Mengarahkan file ke direktori sementara Vercel /tmp untuk upload
+        cb(null, '/tmp/'); 
     },
     filename: function (req, file, cb) {
         cb(null, file.originalname);
@@ -32,13 +38,18 @@ const upload = multer({ storage: storage });
 
 // Fungsi utilitas untuk validasi keamanan path
 function getSafePath(userPath) {
-    const fullPath = path.join(DOCUMENT_ROOT, userPath.startsWith('/') ? userPath.substring(1) : userPath);
-    // Pastikan path yang diminta ada di dalam DOCUMENT_ROOT
-    if (fullPath.startsWith(DOCUMENT_ROOT)) {
-        return fullPath;
+    // Di Vercel, penyimpanan permanen tidak mungkin, jadi kita batasi ke DOCUMENT_ROOT atau /tmp
+    const targetPath = userPath.startsWith('/') ? userPath.substring(1) : userPath;
+    let fullPath = path.join(DOCUMENT_ROOT, targetPath);
+
+    // Untuk memastikan operasi file (rename, delete, save) ditujukan ke lokasi yang diizinkan (DI VERCEL HANYA /tmp)
+    // Karena ini adalah File Editor, kita harus mengakui bahwa fitur ini tidak akan berfungsi 
+    // untuk penyimpanan permanen di Vercel secara default. 
+    // Kita akan tetap menggunakan batasan DOCUMENT_ROOT untuk file yang sudah ada.
+    if (!fullPath.startsWith(DOCUMENT_ROOT)) {
+        return DOCUMENT_ROOT; 
     }
-    // Jika tidak aman, kembalikan ke DOCUMENT_ROOT
-    return DOCUMENT_ROOT; 
+    return fullPath; 
 }
 
 // Fungsi utilitas untuk mendapatkan path relatif dari DOCUMENT_ROOT
@@ -49,16 +60,19 @@ function getRelativePath(absolutePath) {
 
 // --- ROUTES EXPRESS ---
 
-// 1. Route untuk menyajikan file statis (index.html)
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
+// 1. Route untuk menyajikan file statis (index.html) - HAPUS JIKA MENGGUNAKAN VERSEL.JSON STATIS
+// Jika Anda menggunakan vercel.json yang diarahkan ke /index.html (seperti yang disarankan):
+// app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'index.html')); }); 
+// BARIS INI TIDAK DIPERLUKAN LAGI KARENA app.use(express.static...) sudah menangani serving index.html
 
-// 2. API: Mendapatkan Daftar File
+
+// 2. API: Mendapatkan Daftar File (dan rute API lainnya...)
+// ... (Semua rute API 2 hingga 9 tetap sama) ...
+
 app.get('/api/files', async (req, res) => {
     const userDir = req.query.directory || './';
     const safeDir = getSafePath(userDir);
-
+    // ... (rest of the logic) ...
     try {
         const files = await fs.readdir(safeDir);
         const fileList = [];
@@ -108,11 +122,12 @@ app.post('/api/save-file', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Nama file dan konten diperlukan.' });
     }
 
-    const filePath = path.join(getSafePath(directory || './'), file_name);
+    // PENTING: Perubahan Vercel: penyimpanan hanya sementara di /tmp
+    const filePath = path.join('/tmp/', file_name); // Ganti dari getSafePath
 
     try {
         await fs.writeFile(filePath, content);
-        res.json({ success: true, message: 'File berhasil disimpan.' });
+        res.json({ success: true, message: 'File berhasil disimpan (sementara di /tmp).' });
     } catch (error) {
         console.error('Error writing file:', error);
         res.status(500).json({ success: false, message: 'Gagal menyimpan file (Izin ditolak?).', error: error.message });
@@ -124,11 +139,12 @@ app.post('/api/create-folder', async (req, res) => {
     const { new_folder, directory } = req.body;
     if (!new_folder) return res.status(400).json({ success: false, message: 'Nama folder diperlukan.' });
 
-    const newPath = path.join(getSafePath(directory || './'), new_folder);
+    // PENTING: Perubahan Vercel: buat folder di /tmp
+    const newPath = path.join('/tmp/', new_folder); // Ganti dari getSafePath
 
     try {
         await fs.mkdir(newPath, { recursive: true });
-        res.json({ success: true, message: `Folder '${new_folder}' berhasil dibuat.` });
+        res.json({ success: true, message: `Folder '${new_folder}' berhasil dibuat (sementara di /tmp).` });
     } catch (error) {
         console.error('Error creating folder:', error);
         res.status(500).json({ success: false, message: `Gagal membuat folder: ${error.message}` });
@@ -137,16 +153,17 @@ app.post('/api/create-folder', async (req, res) => {
 
 // 6. API: Menghapus File/Folder
 app.delete('/api/delete', async (req, res) => {
-    const { file, directory } = req.query; // Menggunakan query karena DELETE biasanya tidak memiliki body
+    const { file, directory } = req.query; 
 
     if (!file) return res.status(400).json({ success: false, message: 'Nama file/folder diperlukan.' });
     
-    const delPath = path.join(getSafePath(directory || './'), file);
+    // PENTING: Asumsi menghapus dari /tmp untuk file yang dibuat saat runtime,
+    // atau dari DOCUMENT_ROOT jika file adalah bagian dari deployment (yang akan gagal).
+    const delPath = path.join('/tmp/', file); // Lebih aman mengasumsikan /tmp
 
     try {
         const stats = await fs.stat(delPath);
         if (stats.isDirectory()) {
-            // Hapus folder rekursif
             await fs.rm(delPath, { recursive: true, force: true });
             res.json({ success: true, message: `Folder '${file}' berhasil dihapus.` });
         } else {
@@ -161,7 +178,7 @@ app.delete('/api/delete', async (req, res) => {
 
 // 7. API: Upload File
 app.post('/api/upload', upload.array('files'), (req, res) => {
-    // Multer telah menangani upload file.
+    // Multer sudah dikonfigurasi untuk menyimpan di /tmp
     const uploadedNames = req.files.map(f => f.filename);
     res.json({ success: true, message: `Upload ${uploadedNames.length} file berhasil.` });
 });
@@ -173,13 +190,13 @@ app.get('/api/download', (req, res) => {
 
     if (!fileName) return res.status(400).send('Nama file diperlukan.');
 
-    const filePath = path.join(getSafePath(userDir), fileName);
+    // PENTING: Mengunduh dari /tmp untuk file yang baru dibuat
+    const filePath = path.join('/tmp/', fileName);
     
-    // Memberikan file untuk diunduh
     res.download(filePath, fileName, (err) => {
         if (err) {
             console.error('Error during download:', err);
-            res.status(500).send('Gagal mengunduh file.');
+            res.status(500).send('Gagal mengunduh file. (Mungkin file tidak ada di /tmp).');
         }
     });
 });
@@ -192,9 +209,9 @@ app.put('/api/rename', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Nama lama dan nama baru diperlukan.' });
     }
 
-    const safeDir = getSafePath(directory || './');
-    const oldPath = path.join(safeDir, old_name);
-    const newPath = path.join(safeDir, new_name);
+    // PENTING: Mengganti nama di /tmp
+    const oldPath = path.join('/tmp/', old_name);
+    const newPath = path.join('/tmp/', new_name);
 
     try {
         await fs.rename(oldPath, newPath);
@@ -205,8 +222,7 @@ app.put('/api/rename', async (req, res) => {
     }
 });
 
+// HAPUS BAGIAN app.listen(PORT, ...)
 
 // PENTING: Mengekspor aplikasi Express agar Vercel dapat menjalankannya
 module.exports = app;
-
-
