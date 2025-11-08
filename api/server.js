@@ -206,6 +206,7 @@ app.put('/api/rename', async (req, res) => {
 });
 
 
-app.listen(PORT, () => {
-    console.log(`Server Express berjalan di http://localhost:${PORT}`);
-});
+// PENTING: Mengekspor aplikasi Express agar Vercel dapat menjalankannya
+module.exports = app;
+
+
