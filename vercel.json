@@ -7,14 +7,17 @@
     }
   ],
   "routes": [
+    // 1. Prioritas: Melayani index.html secara statis dari root
     {
       "src": "/",
       "dest": "/index.html"
     },
+    // 2. Prioritas: Meneruskan permintaan API ke server Express (server.js)
     {
       "src": "/api/(.*)",
       "dest": "server.js"
     },
+    // 3. Fallback: Meneruskan semua permintaan lain (termasuk aset frontend) ke server.js
     {
       "src": "/(.*)",
       "dest": "server.js"
